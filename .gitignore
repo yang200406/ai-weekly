@@ -19,3 +19,8 @@ history.db-shm
 # OS
 .DS_Store
 Thumbs.db
+
+.vercel
+node_modules/
+package-lock.json
+package.json
