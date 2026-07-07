@@ -429,18 +429,18 @@ def get_stats():
     db = None
     try:
         db = get_db()
-        total_reports = db_fetchone(db, "SELECT COUNT(*) FROM reports")[0]
-        template_rows = db_fetchall(db, "SELECT template, COUNT(*) as count FROM reports GROUP BY template ORDER BY count DESC")
+        total_reports = db_fetchone(db, "SELECT COUNT(*) FROM reports") or [0]; total_reports = total_reports[0]
+        template_rows = db_fetchall(db, "SELECT template, COUNT(*) as count FROM reports GROUP BY template ORDER BY count DESC") or []
         template_usage = {db_row_to_dict(t)["template"]: db_row_to_dict(t)["count"] for t in template_rows}
-        monthly_rows = db_fetchall(db, "SELECT substr(created_at, 1, 7) as month, COUNT(*) as count FROM reports GROUP BY month ORDER BY month DESC LIMIT 12")
+        monthly_rows = db_fetchall(db, "SELECT substr(created_at, 1, 7) as month, COUNT(*) as count FROM reports GROUP BY month ORDER BY month DESC LIMIT 12") or []
         monthly_counts = [{"month": db_row_to_dict(m)["month"], "count": db_row_to_dict(m)["count"]} for m in reversed(monthly_rows)]
         this_month = datetime.now().strftime("%Y-%m")
-        month_count = db_fetchone(db, "SELECT COUNT(*) FROM reports WHERE substr(created_at, 1, 7) = ?", (this_month,))[0]
-        total_tasks = db_fetchone(db, "SELECT COUNT(*) FROM reports WHERE tasks != ''")[0]
-        recent_rows = db_fetchall(db, "SELECT id, title, template, created_at FROM reports ORDER BY created_at DESC LIMIT 5")
+        mc = db_fetchone(db, "SELECT COUNT(*) FROM reports WHERE substr(created_at, 1, 7) = ?", (this_month,)) or [0]; month_count = mc[0]
+        tt = db_fetchone(db, "SELECT COUNT(*) FROM reports WHERE tasks != ''") or [0]; total_tasks = tt[0]
+        recent_rows = db_fetchall(db, "SELECT id, title, template, created_at FROM reports ORDER BY created_at DESC LIMIT 5") or []
         recent_activity = [{"id": db_row_to_dict(r)["id"], "title": db_row_to_dict(r)["title"], "template": db_row_to_dict(r)["template"], "date": db_row_to_dict(r)["created_at"]} for r in recent_rows]
         seven_days_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
-        week_count = db_fetchone(db, "SELECT COUNT(*) FROM reports WHERE created_at >= ?", (seven_days_ago,))[0]
+        wc = db_fetchone(db, "SELECT COUNT(*) FROM reports WHERE created_at >= ?", (seven_days_ago,)) or [0]; week_count = wc[0]
 
         tpl_names = {"standard": "📋 标准", "okr": "🎯 OKR", "concise": "⚡ 简洁", "detailed": "📝 详细", "custom": "✏️ 自定义"}
 
