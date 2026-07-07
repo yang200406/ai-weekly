@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 周报生成器</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://unpkg.com/html-docx-js/dist/html-docx.js"></script>
+    <style>
+        :root {
+            --bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --surface: #fff; --surface-hover: #f8f7ff;
+            --sidebar-bg: #f5f6fa; --sidebar-border: #e8e8e8;
+            --text: #333; --text-secondary: #555; --text-muted: #888; --text-placeholder: #bbb;
+            --border: #e0e0e0; --border-active: #667eea;
+            --accent: #667eea; --accent2: #764ba2;
+            --accent-light: #667eea15; --accent2-light: #764ba215;
+            --result-bg: #f8f9fa; --card-bg: #fff;
+            --danger: #f5576c; --danger-light: #f5576c15;
+            --code-bg: #e8e8e8;
+            --shadow: rgba(0,0,0,0.3); --shadow-sm: rgba(102,126,234,0.15);
+            --input-bg: #fff;
+            --gradient-accent: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --tag-bg: #eef0ff; --tag-text: #667eea;
+        }
+        [data-theme="dark"] {
+            --bg: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 80%);
+            --surface: #2d2d44; --surface-hover: #35355a;
+            --sidebar-bg: #252540; --sidebar-border: #3a3a55;
+            --text: #e0e0e0; --text-secondary: #aaa; --text-muted: #777; --text-placeholder: #555;
+            --border: #444; --border-active: #8b8bf5;
+            --accent: #8b8bf5; --accent2: #a78bfa;
+            --accent-light: #8b8bf520; --accent2-light: #a78bfa20;
+            --result-bg: #1e1e35; --card-bg: #2d2d44;
+            --danger: #f5576c; --danger-light: #f5576c20;
+            --code-bg: #3a3a55;
+            --shadow: rgba(0,0,0,0.6); --shadow-sm: rgba(139,139,245,0.2);
+            --input-bg: #1e1e35;
+            --gradient-accent: linear-gradient(135deg, #8b8bf5 0%, #a78bfa 100%);
+            --tag-bg: #35355a; --tag-text: #a78bfa;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+            background: var(--bg); min-height: 100vh;
+            display: flex; justify-content: center; align-items: center;
+            padding: 20px; transition: background 0.3s;
+        }
+        .app {
+            display: flex; background: var(--surface); border-radius: 16px;
+            width: 100%; max-width: 1100px; min-height: 650px;
+            box-shadow: 0 20px 60px var(--shadow); overflow: hidden; transition: background 0.3s;
+        }
+        .sidebar {
+            width: 260px; min-width: 260px; background: var(--sidebar-bg);
+            border-right: 1px solid var(--sidebar-border); display: flex; flex-direction: column;
+        }
+        .sidebar-header {
+            padding: 14px 14px; font-size: 15px; font-weight: 700; color: var(--text);
+            border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center; gap: 8px;
+        }
+        .sidebar-header .btn-new {
+            background: var(--gradient-accent); color: white; border: none;
+            border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+            white-space: nowrap;
+        }
+        .sidebar-search {
+            padding: 8px 10px; border-bottom: 1px solid var(--border);
+        }
+        .sidebar-search input {
+            width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
+            font-size: 12px; background: var(--input-bg); color: var(--text);
+        }
+        .sidebar-search input:focus { outline: none; border-color: var(--accent); }
+        .tag-filter { padding: 6px 10px; display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border); }
+        .tag-filter-chip {
+            font-size: 10px; padding: 2px 8px; border-radius: 10px; cursor: pointer;
+            border: 1px solid var(--border); background: var(--card-bg); color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .tag-filter-chip.active { background: var(--accent); color: white; border-color: var(--accent); }
+        .history-list { flex: 1; overflow-y: auto; padding: 8px; }
+        .history-item {
+            background: var(--card-bg); border-radius: 8px; padding: 10px 12px;
+            margin-bottom: 5px; cursor: pointer; border: 2px solid transparent;
+            transition: all 0.2s; position: relative;
+        }
+        .history-item:hover { border-color: var(--accent); box-shadow: 0 2px 8px var(--shadow-sm); }
+        .history-item.active { border-color: var(--accent); background: linear-gradient(135deg, var(--accent-light) 0%, var(--accent2-light) 100%); }
+        .history-item .h-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .history-item .h-meta { font-size: 11px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; }
+        .history-item .h-tags { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 4px; }
+        .history-item .h-tag { font-size: 10px; background: var(--tag-bg); color: var(--tag-text); padding: 1px 6px; border-radius: 8px; }
+        .history-item .h-delete { position: absolute; top: 6px; right: 6px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px; display: none; }
+        .history-item:hover .h-delete { display: block; }
+        .history-item .h-delete:hover { color: var(--danger); background: var(--danger-light); }
+        .history-empty { text-align: center; color: var(--text-placeholder); font-size: 13px; padding: 40px 20px; }
+        .sidebar-footer { border-top: 1px solid var(--border); padding: 10px; }
+        .sidebar-footer .btn-stats {
+            width: 100%; background: none; border: 2px dashed var(--border); border-radius: 8px;
+            padding: 10px; color: var(--text-secondary); cursor: pointer; font-size: 13px;
+        }
+        .sidebar-footer .btn-stats:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+
+        .main { flex: 1; padding: 24px 28px; display: flex; flex-direction: column; min-width: 0; position: relative; }
+        .title-row { display: flex; justify-content: center; align-items: center; margin-bottom: 16px; position: relative; }
+        .main h1 { color: var(--text); font-size: 22px; }
+        .theme-toggle { position: absolute; right: 0; background: var(--result-bg); border: 1px solid var(--border); border-radius: 20px; padding: 6px 12px; cursor: pointer; font-size: 16px; }
+
+        .section-label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; font-weight: 600; }
+        .template-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 4px; }
+        .template-card { border: 2px solid var(--border); border-radius: 8px; padding: 8px 12px; cursor: pointer; font-size: 12px; background: var(--card-bg); transition: all 0.2s; }
+        .template-card:hover { border-color: var(--accent); background: var(--surface-hover); }
+        .template-card.active { border-color: var(--accent); background: linear-gradient(135deg, var(--accent-light) 0%, var(--accent2-light) 100%); }
+        .template-card .t-name { font-size: 13px; font-weight: 600; color: var(--text); }
+        .template-card .t-desc { font-size: 11px; color: var(--text-muted); }
+
+        .custom-prompt-area { display: none; margin-bottom: 8px; }
+        .custom-prompt-area textarea { width: 100%; height: 50px; border: 2px solid var(--border); border-radius: 8px; padding: 8px; font-size: 12px; resize: vertical; background: var(--input-bg); color: var(--text); }
+        .custom-prompt-area textarea:focus { outline: none; border-color: var(--accent); }
+        #tasks { width: 100%; height: 110px; border: 2px solid var(--border); border-radius: 10px; padding: 10px 14px; font-size: 14px; resize: vertical; background: var(--input-bg); color: var(--text); }
+        #tasks:focus { outline: none; border-color: var(--accent); }
+        .tag-input-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+        .tag-input-row .section-label { margin-bottom: 0; white-space: nowrap; font-size: 12px; }
+        .tag-input-row input { flex: 1; border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; font-size: 12px; background: var(--input-bg); color: var(--text); }
+        .tag-input-row input:focus { outline: none; border-color: var(--accent); }
+
+        .btn { display: block; width: 100%; margin-top: 10px; padding: 12px; color: white; border: none; border-radius: 10px; font-size: 15px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(102,126,234,0.4); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-generate { background: var(--gradient-accent); }
+        .btn-sm { display: inline-block; width: auto; padding: 7px 14px; font-size: 12px; margin: 0; }
+        .btn-outline { background: var(--surface); color: var(--accent); border: 2px solid var(--accent); border-radius: 8px; cursor: pointer; font-size: 12px; padding: 5px 12px; transition: all 0.2s; }
+        .btn-outline:hover { background: var(--accent-light); }
+        .btn-outline.active-mode { background: var(--accent); color: white; }
+        .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+        .btn-row .btn { flex: 1; min-width: 80px; }
+
+        .result-area { margin-top: 14px; flex: 1; display: none; flex-direction: column; min-height: 0; }
+        .result-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px; }
+        .result-toolbar .left-btns { display: flex; gap: 6px; align-items: center; }
+        .result-title-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+        .result-title-row .editable-title { font-size: 16px; font-weight: 700; color: var(--text); border-bottom: 2px dashed transparent; padding: 2px 4px; cursor: pointer; border-radius: 4px; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .result-title-row .editable-title:hover { border-color: var(--accent); background: var(--accent-light); }
+        .result-title-row .edit-title-icon { font-size: 12px; color: var(--text-muted); cursor: pointer; display: none; }
+        .result-title-row:hover .edit-title-icon { display: inline; }
+        .result-content { flex: 1; padding: 18px; background: var(--result-bg); border-radius: 10px; overflow-y: auto; line-height: 1.8; color: var(--text); font-size: 14px; min-height: 160px; max-height: 360px; word-wrap: break-word; }
+        .edit-textarea { width: 100%; flex: 1; min-height: 160px; max-height: 360px; border: 2px solid var(--accent); border-radius: 10px; padding: 14px; font-size: 14px; resize: vertical; line-height: 1.8; color: var(--text); background: var(--input-bg); font-family: inherit; }
+        .edit-textarea:focus { outline: none; }
+        .result-content h1 { font-size: 19px; margin: 12px 0 6px; color: var(--text); border-bottom: 2px solid var(--accent); padding-bottom: 4px; }
+        .result-content h2 { font-size: 16px; margin: 10px 0 5px; color: var(--text); }
+        .result-content h3 { font-size: 14px; margin: 8px 0 4px; color: var(--text-secondary); }
+        .result-content p { margin: 5px 0; }
+        .result-content ul, .result-content ol { padding-left: 20px; margin: 5px 0; }
+        .result-content li { margin: 2px 0; }
+        .result-content strong { color: var(--accent); }
+        .result-content code { background: var(--code-bg); padding: 2px 5px; border-radius: 4px; font-size: 13px; }
+        .streaming-cursor::after { content: '▊'; animation: blink 1s infinite; color: var(--accent); }
+        @keyframes blink { 0%,50%{opacity:1} 51%,100%{opacity:0} }
+        .loading { text-align: center; color: var(--accent); font-size: 14px; margin-top: 12px; display: none; }
+
+        /* 润色浮动工具栏 */
+        .polish-popup { display: none; position: fixed; z-index: 100; background: var(--surface); border: 1px solid var(--accent); border-radius: 10px; padding: 12px; box-shadow: 0 8px 30px var(--shadow); min-width: 280px; }
+        .polish-popup textarea { width: 100%; height: 50px; border: 1px solid var(--border); border-radius: 6px; padding: 8px; font-size: 12px; resize: vertical; background: var(--input-bg); color: var(--text); margin-bottom: 8px; }
+        .polish-popup textarea:focus { outline: none; border-color: var(--accent); }
+        .polish-popup .btn-sm { margin: 0; }
+
+        /* Title edit input */
+        .title-edit-input { font-size: 16px; font-weight: 700; padding: 2px 6px; border: 2px solid var(--accent); border-radius: 4px; background: var(--input-bg); color: var(--text); width: 300px; }
+
+        /* 统计面板 */
+        .stats-overlay { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: var(--surface); z-index: 10; flex-direction: column; padding: 24px 28px; overflow-y: auto; }
+        .stats-overlay.show { display: flex; }
+        .stats-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .stats-header h2 { color: var(--text); font-size: 19px; }
+        .stat-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+        .stat-card { background: var(--result-bg); border-radius: 10px; padding: 16px 14px; text-align: center; }
+        .stat-card .stat-number { font-size: 28px; font-weight: 700; color: var(--accent); }
+        .stat-card .stat-label { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+        .stats-section { margin-bottom: 16px; }
+        .stats-section h3 { font-size: 14px; color: var(--text-secondary); margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
+        .bar-item { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 12px; }
+        .bar-item .bar-label { width: 80px; text-align: right; color: var(--text-secondary); flex-shrink: 0; }
+        .bar-item .bar-track { flex: 1; height: 20px; background: var(--result-bg); border-radius: 6px; overflow: hidden; }
+        .bar-item .bar-fill { height: 100%; background: var(--gradient-accent); border-radius: 6px; display: flex; align-items: center; padding-left: 8px; font-size: 11px; color: white; font-weight: 600; }
+        .recent-list { list-style: none; }
+        .recent-list li { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-secondary); display: flex; justify-content: space-between; }
+        .recent-list li span:first-child { color: var(--text); cursor: pointer; }
+        .recent-list li span:first-child:hover { color: var(--accent); }
+
+        .shortcuts-hint { text-align: center; color: var(--text-muted); font-size: 11px; margin-top: 10px; }
+
+        @media (max-width: 800px) {
+            .app { flex-direction: column; max-width: 100%; }
+            .sidebar { width: 100%; min-width: 100%; max-height: 200px; }
+            .main { padding: 16px; }
+            .template-grid { grid-template-columns: 1fr; }
+            .stat-cards { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="app" style="position:relative;">
+        <!-- ═══════════ 左侧 ═══════════ -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                📚 历史
+                <button class="btn-new" onclick="newReport()">+ 新建</button>
+            </div>
+            <div class="sidebar-search">
+                <input type="text" id="searchInput" placeholder="🔍 搜索标题或内容..." oninput="onSearchInput()">
+            </div>
+            <div class="tag-filter" id="tagFilterBar"></div>
+            <div class="history-list" id="historyList">
+                <div class="history-empty">还没有周报记录<br>输入内容生成第一篇吧 🚀</div>
+            </div>
+            <div class="sidebar-footer">
+                <button class="btn-stats" onclick="showStats()">📊 数据统计</button>
+            </div>
+        </aside>
+
+        <!-- ═══════════ 右侧 ═══════════ -->
+        <main class="main" id="mainPanel">
+            <div class="title-row">
+                <h1>🤖 AI 周报生成器</h1>
+                <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="切换深色/浅色模式">🌙</button>
+            </div>
+
+            <!-- 统计 -->
+            <div class="stats-overlay" id="statsOverlay">
+                <div class="stats-header"><h2>📊 数据统计</h2><button class="btn-outline" onclick="hideStats()">✕ 关闭</button></div>
+                <div class="stat-cards" id="statCards"></div>
+                <div class="stats-section"><h3>📈 模板使用分布</h3><div class="bar-list" id="templateBars"></div></div>
+                <div class="stats-section"><h3>📅 月度趋势</h3><div class="bar-list" id="monthlyBars"></div></div>
+                <div class="stats-section"><h3>🕐 最近活动</h3><ul class="recent-list" id="recentList"></ul></div>
+            </div>
+
+            <span class="section-label">选择周报格式：</span>
+            <div class="template-grid" id="templateGrid"></div>
+            <div class="custom-prompt-area" id="customPromptArea">
+                <span class="section-label">描述你想要的格式：</span>
+                <textarea id="customPrompt" placeholder="例如：分成三段，每段不超过3条，语气轻松幽默"></textarea>
+            </div>
+
+            <span class="section-label">本周完成的工作：</span>
+            <textarea id="tasks" placeholder="请输入你本周完成的工作内容，例如：&#10;- 完成了用户登录模块的开发&#10;- 修复了3个线上bug&#10;- 参加了需求评审会议"></textarea>
+
+            <div class="tag-input-row">
+                <span class="section-label">🏷️ 标签：</span>
+                <input type="text" id="tagInput" placeholder="用逗号分隔，如：项目A, 年终总结" onchange="onTagInputChange()">
+            </div>
+
+            <button class="btn btn-generate" id="btnGenerate" onclick="generate()">✨ 一键生成周报</button>
+            <div class="loading" id="loading">⏳ AI 正在为你撰写周报，请稍候...</div>
+
+            <div class="result-area" id="resultArea">
+                <div class="result-title-row" id="resultTitleRow">
+                    <span class="editable-title" id="editableTitle" onclick="editTitle()" title="点击编辑标题"></span>
+                    <span class="edit-title-icon">✏️</span>
+                </div>
+                <div class="result-toolbar">
+                    <div class="left-btns">
+                        <button class="btn-outline active-mode" id="btnPreview" onclick="switchMode('preview')">👁 预览</button>
+                        <button class="btn-outline" id="btnEdit" onclick="switchMode('edit')">✏️ 编辑</button>
+                    </div>
+                    <div class="left-btns">
+                        <span style="font-size:11px;color:var(--text-muted);" id="currentRecordLabel"></span>
+                    </div>
+                </div>
+                <div class="result-content" id="resultContent"></div>
+                <textarea class="edit-textarea" id="editTextarea" style="display:none;"></textarea>
+
+                <div class="btn-row" style="margin-top:10px;">
+                    <button class="btn btn-generate btn-sm" id="btnRegenerate" onclick="regenerate()" style="background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);">🔄 重新生成</button>
+                    <button class="btn" id="btnCopy" onclick="copyResult()" style="background:linear-gradient(135deg,#43e97b 0%,#38f9d7 100%);">📋 复制</button>
+                    <button class="btn" id="btnExport" onclick="exportWord()" style="background:linear-gradient(135deg,#f5af19 0%,#f12711 100%);">📄 Word</button>
+<button class="btn btn-sm" id="btnSaveEdit" onclick="saveEdit()" style="background:var(--gradient-accent); display:none;">💾 保存</button>
+                </div>
+            </div>
+            <div class="shortcuts-hint">💡 Ctrl+Enter 生成 | Ctrl+Shift+R 重新生成 | Ctrl+S 保存</div>
+        </main>
+    </div>
+
+    <!-- 润色浮动弹窗 -->
+    <div class="polish-popup" id="polishPopup">
+        <textarea id="polishInstruction" placeholder="怎么改？如：更精简 / 更专业 / 加数据支撑"></textarea>
+        <div style="display:flex;gap:6px;">
+            <button class="btn btn-sm btn-generate" onclick="doPolish()" style="flex:1;">✨ 润色</button>
+            <button class="btn-outline" onclick="closePolish()">取消</button>
+            <button class="btn-outline" onclick="undoPolish()" title="撤销">↩</button>
+        </div>
+    </div>
+
+<script>
+// ── 安全：禁用 Markdown 中的原始 HTML，防 XSS ───────────────
+const _escape = (s) => { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; };
+marked.use({ breaks: true, renderer: { html: (t) => _escape(t) } });
+
+// ── 全局状态 ────────────────────────────────────────────────
+let selectedTemplate = 'standard', rawMarkdown = '', currentHistoryId = null;
+let currentTasks = '', currentCustomPrompt = '', currentMode = 'preview', currentTags = '';
+let streamAbortController = null;
+let polishSelection = '', polishRange = null, polishUndoText = '';
+
+// ── apiFetch ─────────────────────────────────────────────────
+async function apiFetch(url, options = {}) {
+    let response;
+    try { response = await fetch(url, options); }
+    catch (err) { throw new Error(`无法连接到服务器 (${err.message})`); }
+    if (!response.ok) {
+        let em;
+        try { const b = await response.json(); em = b.error || b.detail || `HTTP ${response.status}`; }
+        catch { const t = await response.text().catch(()=>''); em = t.startsWith('<!DOCTYPE') ? `服务器错误 (HTTP ${response.status})` : (t.slice(0,200) || `HTTP ${response.status}`); }
+        throw new Error(em);
+    }
+    return response.json();
+}
+
+// ── 深色模式 ────────────────────────────────────────────────
+function initTheme() {
+    if (localStorage.getItem('ai-weekly-theme')==='dark') {
+        document.documentElement.setAttribute('data-theme','dark');
+        document.getElementById('themeToggle').textContent='☀️';
+    }
+}
+function toggleTheme() {
+    const n = document.documentElement.getAttribute('data-theme')==='dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', n);
+    localStorage.setItem('ai-weekly-theme', n);
+    document.getElementById('themeToggle').textContent = n==='dark' ? '☀️' : '🌙';
+}
+
+// ── 草稿自动保存 ────────────────────────────────────────────
+let draftTimer = null;
+function saveDraft() {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => {
+        const draft = {
+            tasks: document.getElementById('tasks').value,
+            customPrompt: document.getElementById('customPrompt').value,
+            tags: document.getElementById('tagInput').value,
+            template: selectedTemplate
+        };
+        if (draft.tasks || draft.customPrompt || draft.tags) localStorage.setItem('ai-weekly-draft', JSON.stringify(draft));
+    }, 500);
+}
+function loadDraft() {
+    try {
+        const d = JSON.parse(localStorage.getItem('ai-weekly-draft'));
+        if (!d || !d.tasks) return;
+        document.getElementById('tasks').value = d.tasks || '';
+        if (d.template) selectTemplate(d.template, document.querySelector(`[data-tid="${d.template}"]`));
+        if (d.customPrompt) document.getElementById('customPrompt').value = d.customPrompt;
+        if (d.tags) { document.getElementById('tagInput').value = d.tags; currentTags = d.tags; updateTagFilter(); }
+    } catch(e) {}
+}
+function clearDraft() { localStorage.removeItem('ai-weekly-draft'); }
+
+// ── 快捷键 ──────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); generate(); }
+        if (e.ctrlKey && e.key === 's') { e.preventDefault(); if (currentMode==='edit') saveEdit(); }
+        if (e.ctrlKey && e.shiftKey && (e.key==='R'||e.key==='r')) { e.preventDefault(); regenerate(); }
+    }
+});
+
+// ── 初始化 ──────────────────────────────────────────────────
+async function init() {
+    initTheme(); loadDraft(); await loadTemplates(); await loadHistory();
+    document.getElementById('tasks').addEventListener('input', saveDraft);
+    document.getElementById('customPrompt').addEventListener('input', saveDraft);
+    document.getElementById('tagInput').addEventListener('input', saveDraft);
+}
+// ── 模板 ────────────────────────────────────────────────────
+async function loadTemplates() {
+    const data = await apiFetch('/api/templates');
+    const grid = document.getElementById('templateGrid'); grid.innerHTML = '';
+    data.templates.forEach(t => {
+        const c = document.createElement('div');
+        c.className = 'template-card' + (t.id===selectedTemplate?' active':'');
+        c.innerHTML = `<div class="t-name">${t.name}</div><div class="t-desc">${t.description}</div>`;
+        c.onclick = () => selectTemplate(t.id, c); c.dataset.tid = t.id; grid.appendChild(c);
+    });
+    const cc = document.createElement('div'); cc.className='template-card'; cc.dataset.tid='custom';
+    cc.innerHTML = '<div class="t-name">✏️ 自定义格式</div><div class="t-desc">自己描述想要的周报格式</div>';
+    cc.onclick = () => selectTemplate('custom', cc); grid.appendChild(cc);
+}
+function selectTemplate(tid, el) {
+    selectedTemplate = tid;
+    document.querySelectorAll('.template-card').forEach(c=>c.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('customPromptArea').style.display = tid==='custom'?'block':'none';
+    saveDraft();
+}
+
+// ── 历史记录（含搜索和标签）──────────────────────────────────
+let searchTimer = null;
+async function loadHistory(q='', tag='') {
+    try {
+        let url = '/api/history?';
+        if (q) url += 'q=' + encodeURIComponent(q) + '&';
+        if (tag) url += 'tag=' + encodeURIComponent(tag);
+        const data = await apiFetch(url);
+        const list = document.getElementById('historyList');
+        if (!data.items.length) { list.innerHTML='<div class="history-empty">没有匹配的记录</div>'; return; }
+        list.innerHTML = data.items.map(item => {
+            const date = item.created_at ? item.created_at.slice(0,10) : '';
+            const tplName = item.template==='custom'?'✏️':({standard:'📋',okr:'🎯',concise:'⚡',detailed:'📝'}[item.template]||item.template);
+            const tags = (item.tags||'').split(',').map(t=>t.trim()).filter(Boolean);
+            const tagBadges = tags.map(t=>`<span class="h-tag">${escapeHtml(t)}</span>`).join('');
+            return `<div class="history-item" data-id="${item.id}" onclick="openHistory(${item.id})">
+                <div class="h-title">${escapeHtml(item.title||'(无标题)')}</div>
+                <div class="h-meta"><span>${tplName}</span><span>${date}</span></div>
+                ${tagBadges ? '<div class="h-tags">'+tagBadges+'</div>' : ''}
+                <button class="h-delete" onclick="deleteHistory(event,${item.id})">×</button>
+            </div>`;
+        }).join('');
+        updateTagFilter();
+    } catch(err) { console.error(err); }
+}
+function onSearchInput() {
+    clearTimeout(searchTimer);
+    const q = document.getElementById('searchInput').value.trim();
+    searchTimer = setTimeout(() => loadHistory(q, selectedTagFilter), 300);
+}
+let selectedTagFilter = '';
+function filterByTag(tag) {
+    selectedTagFilter = (tag===selectedTagFilter) ? '' : tag;
+    loadHistory(document.getElementById('searchInput').value.trim(), selectedTagFilter);
+}
+async function updateTagFilter() {
+    try {
+        const data = await apiFetch('/api/history');
+        const allTags = new Set();
+        data.items.forEach(item => (item.tags||'').split(',').map(t=>t.trim()).filter(Boolean).forEach(t=>allTags.add(t)));
+        const bar = document.getElementById('tagFilterBar');
+        bar.innerHTML = [...allTags].map(t =>
+            `<span class="tag-filter-chip${t===selectedTagFilter?' active':''}" onclick="filterByTag('${escapeHtml(t)}')">${escapeHtml(t)}</span>`
+        ).join('');
+    } catch(e) {}
+}
+async function openHistory(id) {
+    const item = await apiFetch(`/api/history/${id}`);
+    currentHistoryId=item.id; currentTasks=item.tasks; currentCustomPrompt=item.custom_prompt||''; rawMarkdown=item.content; currentTags=item.tags||'';
+    document.getElementById('tasks').value=item.tasks;
+    if(item.custom_prompt) document.getElementById('customPrompt').value=item.custom_prompt;
+    document.getElementById('tagInput').value=item.tags||'';
+    document.getElementById('currentRecordLabel').textContent = `📅 ${item.created_at?.slice(0,16)||''}`;
+    if(item.template==='custom') selectTemplate('custom',document.querySelector('[data-tid="custom"]'));
+    else if(item.template&&document.querySelector(`[data-tid="${item.template}"]`)) selectTemplate(item.template,document.querySelector(`[data-tid="${item.template}"]`));
+    showResult(item.content);
+    document.querySelectorAll('.history-item').forEach(el=>el.classList.remove('active'));
+    const t=document.querySelector(`.history-item[data-id="${id}"]`); if(t) t.classList.add('active');
+    switchMode('preview');
+}
+async function deleteHistory(e,id){ e.stopPropagation(); if(!confirm('确定删除？'))return; await apiFetch(`/api/history/${id}`,{method:'DELETE'}); if(currentHistoryId===id)newReport(); await loadHistory(); }
+function newReport() {
+    if(streamAbortController){streamAbortController.abort();streamAbortController=null;}
+    currentHistoryId=null; currentTasks=''; currentCustomPrompt=''; rawMarkdown=''; currentTags='';
+    document.getElementById('tasks').value=''; document.getElementById('customPrompt').value=''; document.getElementById('tagInput').value='';
+    document.getElementById('resultArea').style.display='none';
+    document.getElementById('currentRecordLabel').textContent='';
+    document.querySelectorAll('.history-item').forEach(el=>el.classList.remove('active'));
+    selectTemplate('standard',document.querySelector('[data-tid="standard"]'));
+    clearDraft(); setLoading(false);
+}
+function onTagInputChange() { currentTags = document.getElementById('tagInput').value; saveDraft(); }
+
+// ── 生成 ────────────────────────────────────────────────────
+async function generate() {
+    const tasks = document.getElementById('tasks').value.trim();
+    if(!tasks){alert('请先输入工作内容');return;}
+    const customPrompt = selectedTemplate==='custom' ? document.getElementById('customPrompt').value.trim() : '';
+    if(selectedTemplate==='custom'&&!customPrompt){alert('请描述格式');return;}
+    currentTasks=tasks; currentCustomPrompt=customPrompt; currentTags=document.getElementById('tagInput').value;
+    if(streamAbortController)streamAbortController.abort();
+    streamAbortController=new AbortController();
+    const resultArea=document.getElementById('resultArea'), resultContent=document.getElementById('resultContent');
+    resultArea.style.display='flex'; resultContent.style.display='block';
+    resultContent.innerHTML='<span class="streaming-cursor"></span>'; resultContent.scrollTop=0;
+    document.getElementById('editTextarea').style.display='none';
+    document.getElementById('btnSaveEdit').style.display='none'; switchMode('preview');
+    currentHistoryId=null; rawMarkdown='';
+    document.getElementById('currentRecordLabel').textContent='⏳ 生成中...';
+    document.getElementById('editableTitle').textContent='';
+    document.getElementById('btnGenerate').disabled=true;
+    document.getElementById('btnRegenerate').disabled=true;
+    let lastRender=0;
+    try {
+        const r = await fetch('/api/generate-stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tasks,template:selectedTemplate,custom_prompt:customPrompt,tags:currentTags}),signal:streamAbortController.signal});
+        if(!r.ok){let em=`HTTP ${r.status}`;try{const ed=await r.json();em=ed.error||em;}catch(e){}throw new Error(em);}
+        const reader=r.body.getReader();const decoder=new TextDecoder();let buffer='';
+        while(true){const{ done,value}=await reader.read();if(done)break;
+            buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
+            for(const line of lines){if(!line.startsWith('data: '))continue;
+                try{const ev=JSON.parse(line.slice(6));
+                    if(ev.chunk){rawMarkdown+=ev.chunk;const now=Date.now();if(now-lastRender>80){lastRender=now;resultContent.innerHTML=marked.parse(rawMarkdown)+'<span class="streaming-cursor"></span>';resultContent.scrollTop=resultContent.scrollHeight;}}
+                    else if(ev.done){rawMarkdown=ev.full_text||rawMarkdown;currentHistoryId=ev.id;resultContent.innerHTML=marked.parse(rawMarkdown);document.getElementById('currentRecordLabel').textContent='📅 '+new Date().toISOString().slice(0,16);updateEditableTitle();clearDraft();await loadHistory();setTimeout(()=>{const el=document.querySelector(`.history-item[data-id="${ev.id}"]`);if(el)el.classList.add('active');},100);}
+                    else if(ev.error){resultContent.innerHTML='❌ '+ev.error;}}catch(e){}}}
+        resultContent.innerHTML=marked.parse(rawMarkdown);updateEditableTitle();
+    }catch(err){if(err.name!=='AbortError')resultContent.innerHTML='❌ '+err.message;}
+    finally{streamAbortController=null;document.getElementById('btnGenerate').disabled=false;document.getElementById('btnRegenerate').disabled=false;if(resultContent.innerHTML.includes('streaming-cursor'))resultContent.innerHTML=marked.parse(rawMarkdown);}
+}
+async function regenerate(){if(!currentTasks){alert('没有可重新生成的内容');return;}await generate();}
+function showResult(md){
+    document.getElementById('resultArea').style.display='flex';
+    document.getElementById('resultContent').innerHTML=marked.parse(md);
+    document.getElementById('resultContent').style.display='block';
+    document.getElementById('editTextarea').style.display='none';
+    document.getElementById('btnSaveEdit').style.display='none';currentMode='preview';updateModeButtons();
+    updateEditableTitle();
+}
+
+// ── 标题编辑 ────────────────────────────────────────────────
+function updateEditableTitle() {
+    const el = document.getElementById('editableTitle');
+    el.textContent = (rawMarkdown||'').trim().split('\n')[0].replace(/^#+\s*/,'').trim() || '周报';
+}
+async function editTitle() {
+    if (!currentHistoryId) return;
+    const el = document.getElementById('editableTitle');
+    const old = el.textContent;
+    const input = document.createElement('input');
+    input.type='text'; input.value=old; input.className='title-edit-input';
+    input.onblur = async () => {
+        const nv = input.value.trim() || old;
+        el.textContent = nv;
+        input.replaceWith(el);
+        try { await apiFetch(`/api/history/${currentHistoryId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:nv})}); await loadHistory(); }
+        catch(e) { alert('更新标题失败：'+e.message); }
+    };
+    input.onkeydown = e => { if(e.key==='Enter') input.blur(); if(e.key==='Escape') { input.value=old; input.blur(); } };
+    el.replaceWith(input); input.focus(); input.select();
+}
+
+// ── 编辑模式 ────────────────────────────────────────────────
+function switchMode(mode) {
+    const pv=document.getElementById('resultContent'), et=document.getElementById('editTextarea'), sb=document.getElementById('btnSaveEdit');
+    const wasEdit = currentMode==='edit';
+    currentMode=mode; updateModeButtons();
+    if(mode==='preview'){
+        if(wasEdit) rawMarkdown=et.value;  // 只有从编辑模式切过来才读 textarea
+        pv.innerHTML=marked.parse(rawMarkdown);updateEditableTitle();
+        pv.style.display='block';et.style.display='none';sb.style.display='none';
+    }else{
+        et.value=rawMarkdown;et.style.display='block';pv.style.display='none';sb.style.display='inline-block';
+    }
+}
+function updateModeButtons(){const bp=document.getElementById('btnPreview'),be=document.getElementById('btnEdit');if(currentMode==='preview'){bp.classList.add('active-mode');be.classList.remove('active-mode');}else{be.classList.add('active-mode');bp.classList.remove('active-mode');}}
+async function saveEdit(){
+    if(!currentHistoryId){
+        const tasks=currentTasks||document.getElementById('tasks').value.trim();
+        if(!tasks){alert('请先输入工作内容');return;}
+        const data=await apiFetch('/api/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tasks,template:selectedTemplate,custom_prompt:currentCustomPrompt,tags:currentTags,content:document.getElementById('editTextarea').value})});
+        currentHistoryId=data.id;rawMarkdown=document.getElementById('editTextarea').value;
+        document.getElementById('currentRecordLabel').textContent='💾 已保存 '+new Date().toISOString().slice(0,16);
+        updateEditableTitle(); await loadHistory(); switchMode('preview');
+    }else{
+        await apiFetch(`/api/history/${currentHistoryId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:document.getElementById('editTextarea').value})});
+        rawMarkdown=document.getElementById('editTextarea').value;
+        document.getElementById('currentRecordLabel').textContent='💾 已保存 '+new Date().toISOString().slice(0,16);
+        updateEditableTitle(); await loadHistory(); switchMode('preview');
+    }
+}
+
+// ── 工具 ────────────────────────────────────────────────────
+function setLoading(l){document.getElementById('btnGenerate').disabled=l;document.getElementById('btnRegenerate').disabled=l;document.getElementById('loading').style.display=l?'block':'none';if(l)document.getElementById('resultArea').style.display='none';}
+async function copyResult(){const t=currentMode==='edit'?document.getElementById('editTextarea').value:rawMarkdown;await navigator.clipboard.writeText(t);const b=document.getElementById('btnCopy');b.textContent='✅ 已复制';setTimeout(()=>b.textContent='📋 复制',2000);}
+function exportWord(){let hc;if(currentMode==='edit')hc=marked.parse(document.getElementById('editTextarea').value);else hc=document.getElementById('resultContent').innerHTML;const converted=htmlDocx.asBlob(`<html><head><meta charset="utf-8"><style>body{font-family:"微软雅黑",sans-serif;font-size:14px;line-height:1.8;color:#333;padding:20px}h1{font-size:20px;border-bottom:2px solid #667eea}h2{font-size:17px}h3{font-size:15px}ul,ol{padding-left:24px}strong{color:#667eea}</style></head><body>${hc}</body></html>`);const u=URL.createObjectURL(converted);const a=document.createElement('a');a.href=u;a.download='周报_'+new Date().toISOString().slice(0,10)+'.docx';a.click();URL.revokeObjectURL(u);}
+function escapeHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+
+// ── AI 润色 ─────────────────────────────────────────────────
+document.addEventListener('mouseup', () => {
+    setTimeout(() => {
+        const sel = window.getSelection();
+        if (!sel || !sel.toString().trim() || sel.rangeCount===0) { closePolish(); return; }
+        const rc = document.getElementById('resultContent');
+        if (!rc.contains(sel.anchorNode) || currentMode!=='preview') { closePolish(); return; }
+        polishSelection = sel.toString().trim();
+        polishRange = sel.getRangeAt(0);
+        const rect = sel.getRangeAt(0).getBoundingClientRect();
+        const popup = document.getElementById('polishPopup');
+        popup.style.display = 'block';
+        popup.style.left = Math.min(rect.left + window.scrollX, window.innerWidth - 310) + 'px';
+        popup.style.top = (rect.bottom + window.scrollY + 8) + 'px';
+        document.getElementById('polishInstruction').value = '';
+        document.getElementById('polishInstruction').focus();
+    }, 10);
+});
+document.addEventListener('mousedown', e => { const pp=document.getElementById('polishPopup'); if(!pp.contains(e.target)) closePolish(); });
+function closePolish(){document.getElementById('polishPopup').style.display='none';polishSelection='';polishRange=null;}
+function undoPolish(){if(!polishUndoText||!polishRange)return;polishRange.deleteContents();polishRange.insertNode(document.createTextNode(polishUndoText));polishUndoText='';closePolish();}
+async function doPolish(){
+    const instruction = document.getElementById('polishInstruction').value.trim() || '让这段文字更专业、更流畅';
+    const popup = document.getElementById('polishPopup');
+    const polishBtn = popup.querySelector('.btn-generate');
+    try {
+        polishBtn.disabled = true; polishBtn.textContent = '⏳...';
+        const data = await apiFetch('/api/polish', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:polishSelection,instruction})});
+        if (polishRange && data.polished) {
+            polishUndoText = polishSelection;
+            polishRange.deleteContents();
+            polishRange.insertNode(document.createTextNode(data.polished));
+            // 同步 rawMarkdown
+            const rc = document.getElementById('resultContent');
+            rawMarkdown = rc.innerText || rc.textContent || rawMarkdown;
+        }
+        closePolish();
+    } catch(e) { alert('润色失败：'+e.message); }
+    finally { polishBtn.disabled = false; polishBtn.textContent = '✨ 润色'; }
+}
+
+// ── 统计 ────────────────────────────────────────────────────
+async function showStats() {
+    const stats = await apiFetch('/api/stats');
+    document.getElementById('statCards').innerHTML = `
+        <div class="stat-card"><div class="stat-number">${stats.total_reports}</div><div class="stat-label">📝 总周报</div></div>
+        <div class="stat-card"><div class="stat-number">${stats.month_count}</div><div class="stat-label">📅 本月</div></div>
+        <div class="stat-card"><div class="stat-number">${stats.week_count}</div><div class="stat-label">📆 近7天</div></div>
+        <div class="stat-card"><div class="stat-number">${stats.total_tasks_count}</div><div class="stat-label">✍️ 有记录</div></div>`;
+    const mt=Math.max(1,...stats.template_usage.map(t=>t.count));
+    document.getElementById('templateBars').innerHTML=stats.template_usage.map(t=>`<div class="bar-item"><span class="bar-label">${t.name}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(t.count/mt*100)}%">${t.count} 篇</div></div></div>`).join('')||'<div style="color:var(--text-muted);font-size:12px;">暂无</div>';
+    const mm=Math.max(1,...stats.monthly_counts.map(m=>m.count));
+    document.getElementById('monthlyBars').innerHTML=stats.monthly_counts.map(m=>`<div class="bar-item"><span class="bar-label">${m.month}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(m.count/mm*100)}%">${m.count} 篇</div></div></div>`).join('')||'<div style="color:var(--text-muted);font-size:12px;">暂无</div>';
+    document.getElementById('recentList').innerHTML=stats.recent_activity.map(r=>`<li><span onclick="openHistory(${r.id})">📄 ${escapeHtml(r.title||'(无标题)')}</span><span>${(r.date||'').slice(0,16)}</span></li>`).join('')||'<li style="color:var(--text-muted)">暂无</li>';
+    document.getElementById('statsOverlay').classList.add('show');
+}
+function hideStats(){document.getElementById('statsOverlay').classList.remove('show');}
+
+// ── 启动 ────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
