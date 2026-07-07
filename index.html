@@ -103,6 +103,13 @@
             padding: 10px; color: var(--text-secondary); cursor: pointer; font-size: 13px;
         }
         .sidebar-footer .btn-stats:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+        .dev-card { display: flex; align-items: center; gap: 10px; padding: 12px 10px; margin-top: 8px; border-radius: 8px; background: var(--card-bg); }
+        .dev-avatar { font-size: 28px; }
+        .dev-info { flex: 1; min-width: 0; }
+        .dev-name { font-size: 13px; font-weight: 700; color: var(--text); }
+        .dev-title { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+        .btn-contact { display: block; width: 100%; margin-top: 6px; padding: 8px; background: var(--gradient-accent); color: white; border: none; border-radius: 8px; font-size: 12px; text-align: center; text-decoration: none; cursor: pointer; transition: transform 0.15s; }
+        .btn-contact:hover { transform: scale(1.03); }
 
         .main { flex: 1; padding: 24px 28px; display: flex; flex-direction: column; min-width: 0; position: relative; }
         .title-row { display: flex; justify-content: center; align-items: center; margin-bottom: 16px; position: relative; }
@@ -191,6 +198,9 @@
         .recent-list li span:first-child:hover { color: var(--accent); }
 
         .shortcuts-hint { text-align: center; color: var(--text-muted); font-size: 11px; margin-top: 10px; }
+        .promo-cta { margin-top: 12px; padding: 10px 16px; background: var(--accent-light); border-radius: 8px; font-size: 12px; color: var(--text-secondary); line-height: 1.8; }
+        .promo-cta a { color: var(--accent); font-weight: 700; text-decoration: none; }
+        .promo-cta a:hover { text-decoration: underline; }
 
         @media (max-width: 800px) {
             .app { flex-direction: column; max-width: 100%; }
@@ -218,6 +228,14 @@
             </div>
             <div class="sidebar-footer">
                 <button class="btn-stats" onclick="showStats()">📊 数据统计</button>
+                <div class="dev-card">
+                    <div class="dev-avatar">👨‍💻</div>
+                    <div class="dev-info">
+                        <div class="dev-name">yang200406</div>
+                        <div class="dev-title">全栈开发 · 接定制需求</div>
+                    </div>
+                </div>
+                <a class="btn-contact" href="mailto:2117476662@qq.com">💬 咨询定制网站 / App</a>
             </div>
         </aside>
 
@@ -279,7 +297,13 @@
 <button class="btn btn-sm" id="btnSaveEdit" onclick="saveEdit()" style="background:var(--gradient-accent); display:none;">💾 保存</button>
                 </div>
             </div>
-            <div class="shortcuts-hint">💡 Ctrl+Enter 生成 | Ctrl+Shift+R 重新生成 | Ctrl+S 保存</div>
+            <div class="shortcuts-hint">
+                💡 Ctrl+Enter 生成 | Ctrl+Shift+R 重新生成 | Ctrl+S 保存
+                <div class="promo-cta">
+                    需要定制企业官网 / 内部工具 / 小程序？<br>
+                    👉 <a href="mailto:2117476662@qq.com">2117476662@qq.com</a> ｜ 微信同号
+                </div>
+            </div>
         </main>
     </div>
 
